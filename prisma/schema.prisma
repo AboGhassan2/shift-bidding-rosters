@@ -1,1 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
 
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id          String   @id @default(cuid())
+  employeeId  String   @unique
+  name        String
+  email       String?  @unique
+  department  String
+  position    String?
+  seniority   Int
+  isActive    Boolean  @default(true)
+  password    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  bids        Bid[]
+  assignments Assignment[]
+  
+  @@map("employees")
+}
+
+model RosterPeriod {
+  id          String   @id @default(cuid())
+  year        Int
+  month       Int
+  status      String
+  startDate   DateTime
+  endDate     DateTime
+  totalLines  Int      @default(2500)
+  createdAt   DateTime @default(now())
+  
+  lines       RosterLine[]
+  bids        Bid[]
+  assignments Assignment[]
+  
+  @@unique([year, month])
+  @@map("roster_periods")
+}
+
+model RosterLine {
+  id              String @id @default(cuid())
+  lineNumber      Int
+  rosterPeriodId  String
+  date            DateTime
+  shift           String
+  department      String
+  isAvailable     Boolean @default(true)
+  
+  rosterPeriod RosterPeriod @relation(fields: [rosterPeriodId], references: [id], onDelete: Cascade)
+  bids         Bid[]
+  assignment   Assignment?
+  
+  @@unique([rosterPeriodId, lineNumber, date])
+  @@map("roster_lines")
+}
+
+model Bid {
+  id             String @id @default(cuid())
+  employeeId     String
+  rosterPeriodId String
+  rosterLineId   String
+  priority       Int
+  submittedAt    DateTime @default(now())
+  
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  rosterPeriod RosterPeriod @relation(fields: [rosterPeriodId], references: [id], onDelete: Cascade)
+  rosterLine   RosterLine   @relation(fields: [rosterLineId], references: [id], onDelete: Cascade)
+  
+  @@unique([employeeId, rosterPeriodId, rosterLineId])
+  @@map("bids")
+}
+
+model Assignment {
+  id             String @id @default(cuid())
+  employeeId     String
+  rosterPeriodId String
+  rosterLineId   String
+  assignedAt     DateTime @default(now())
+  
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  rosterPeriod RosterPeriod @relation(fields: [rosterPeriodId], references: [id], onDelete: Cascade)
+  rosterLine   RosterLine   @relation(fields: [rosterLineId], references: [id], onDelete: Cascade)
+  
+  @@unique([rosterPeriodId, rosterLineId])
+  @@unique([employeeId, rosterPeriodId])
+  @@map("assignments")
+}
