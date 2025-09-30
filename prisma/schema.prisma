@@ -1,3 +1,13 @@
+model Shift {
+  // ...
+  rosterLineId String
+  rosterLine   RosterLine @relation(fields: [rosterLineId], references: [id], onDelete: Cascade, map: "shift_roster_line_fkey")
+  // Add @unique if rosterLineId should be unique per shift
+  @@unique([rosterLineId, date]) // if needed
+}
+
+
+
 generator client {
   provider = "prisma-client-js"
 }
