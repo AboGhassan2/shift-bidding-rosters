@@ -55,7 +55,7 @@ model RosterLine {
   
   rosterPeriod RosterPeriod @relation(fields: [rosterPeriodId], references: [id], onDelete: Cascade)
   bids         Bid[]        // One roster line can have many bids
-  assignment   Assignment?  // One roster line can have at most one assignment
+  assignment   Assignment?  // One roster line can have at most one assignment (globally, due to @unique on rosterLineId)
   
   @@unique([rosterPeriodId, lineNumber, date])
   @@map("roster_lines")
@@ -65,7 +65,7 @@ model Bid {
   id             String @id @default(cuid())
   employeeId     String
   rosterPeriodId String
-  rosterLineId   String  // Foreign key to RosterLine
+  rosterLineId   String  // Foreign key to RosterLine - not unique, many bids per line
   priority       Int
   submittedAt    DateTime @default(now())
   
@@ -81,14 +81,14 @@ model Assignment {
   id             String @id @default(cuid())
   employeeId     String
   rosterPeriodId String
-  rosterLineId   String
+  rosterLineId   String @unique  // <-- Add @unique to satisfy Prisma's one-to-one validation
   assignedAt     DateTime @default(now())
   
   employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   rosterPeriod RosterPeriod @relation(fields: [rosterPeriodId], references: [id], onDelete: Cascade)
   rosterLine   RosterLine   @relation(fields: [rosterLineId], references: [id], onDelete: Cascade)
   
-  @@unique([rosterPeriodId, rosterLineId])  // One roster line can have at most one assignment
+  // @@unique([rosterPeriodId, rosterLineId])  // Remove this as @unique on rosterLineId makes it global
   @@unique([employeeId, rosterPeriodId])    // One employee can have at most one assignment per period
   @@map("assignments")
 }
