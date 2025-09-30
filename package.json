@@ -1,3 +1,14 @@
+
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "postinstall": "prisma generate"
+  }
+}
+
+
 {
   "name": "nextjs",
   "version": "0.1.0",
