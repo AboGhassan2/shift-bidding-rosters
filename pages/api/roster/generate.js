@@ -32,15 +32,17 @@ export default async function handler(req, res) {
 
     // Save to database
     const created = await prisma.shift.createMany({
-      data: shifts.map(s => ({,
-        id: s.id,
-        role: s.role,
-        date: s.date,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        status: s.status
-      })),
-      skipDuplicates: true
+      const created = await prisma.shift.createMany({
+  data: shifts.map(s => ({  // ← Add 'data:' property name
+    id: s.id,
+    role: s.role,
+    date: s.date,
+    startTime: s.startTime,
+    endTime: s.endTime,
+    status: s.status
+  })),
+  skipDuplicates: true
+});
     });
 
     res.status(200).json({ success: true, count: created.count });
