@@ -1,4 +1,14 @@
 {
+  "scripts": {
+    "seed": "node prisma/seed.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}
+
+
+{
   "name": "shift-bidding-rosters",
   "version": "0.1.0",
   "private": true,
