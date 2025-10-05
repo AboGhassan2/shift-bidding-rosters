@@ -11,21 +11,30 @@ async function main() {
     data: { name: 'Maintenance' }
   });
 
+  const support = await prisma.department.create({
+    data: { name: 'Support' }
+  });
+
   // Create sample employees
   for (let i = 1; i <= 100; i++) {
     await prisma.employee.create({
       data: {
         employeeId: `EMP${String(i).padStart(4, '0')}`,
         name: `Employee ${i}`,
-        departmentId: i % 2 === 0 ? operations.id : maintenance.id,
+        departmentId: i % 3 === 0 ? operations.id : i % 3 === 1 ? maintenance.id : support.id,
         position: 'Staff'
       }
     });
   }
 
-  console.log('Seeded 100 employees');
+  console.log('✅ Seeded 100 employees in 3 departments');
 }
 
 main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+  .catch((e) => {
+    console.error('❌ Error seeding database:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
