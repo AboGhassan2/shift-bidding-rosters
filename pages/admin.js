@@ -20,34 +20,29 @@ export default function Admin() {
     setResult(null)
 
     try {
-      const response = await fetch('/api/roster/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
+      // Example of frontend fetch with error handling
+try {
+  const response = await fetch('/api/roster/generate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ year: 2025, month: 10 }),
+  });
 
-      const data = await response.json()
-
-      if (response.ok) {
-        setResult(data)
-        fetchRosters() // Refresh roster list
-      } else {
-        setError(data.error || 'Generation failed')
-      }
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+  if (!response.ok) {
+    // Handle non-2xx responses (e.g., 500 errors)
+    const errorText = await response.text(); // Get the HTML error page content
+    console.error('API Error:', response.status, errorText);
+    throw new Error(`API Error: ${response.status}`);
   }
 
-  const fetchRosters = async () => {
-    try {
-      const response = await fetch('/api/roster/list')
-      const data = await response.json()
-      setRosters(data.rosters || [])
-    } catch (err) {
-      console.error('Failed to fetch rosters:', err)
+  const data = await response.json(); // This line will fail if response is HTML
+  console.log('Success:', data);
+} catch (error) {
+  console.error('Fetch Error:', error);
+  // Handle the error appropriately in your UI
+}
     }
   }
 
