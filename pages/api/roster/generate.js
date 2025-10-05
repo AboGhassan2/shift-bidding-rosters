@@ -31,23 +31,25 @@ export default async function handler(req, res) {
     }
 
     // Save to database
+    // The original code had a duplicate 'const created = await ...' line and incorrect object structure.
+    // It should be a single call to prisma.shift.createMany with a 'data' property.
     const created = await prisma.shift.createMany({
-      const created = await prisma.shift.createMany({
-  data: shifts.map(s => ({  // ← Add 'data:' property name
-    id: s.id,
-    role: s.role,
-    date: s.date,
-    startTime: s.startTime,
-    endTime: s.endTime,
-    status: s.status
-  })),
-  skipDuplicates: true
-});
+      data: shifts.map(s => ({
+        id: s.id,
+        role: s.role,
+        date: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        status: s.status
+      })),
+      skipDuplicates: true // Optional: Prevents errors if shifts with the same 'id' already exist
     });
 
     res.status(200).json({ success: true, count: created.count });
   } catch (error) {
-    console.error('Roster generation failed:', error);
-    res.status(500).json({ error: 'Failed to generate roster' });
+    console.error('Roster generation API route error:', error);
+    // It's good practice to send a more specific error message in development,
+    // but be careful not to expose sensitive information in production.
+    res.status(500).json({ error: 'Failed to generate roster', details: error.message });
   }
 }
