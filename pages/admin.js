@@ -1,86 +1,84 @@
 // pages/admin.js
-import { useState } from 'react'
-import RosterTable from '../components/RosterTable' // Ensure this component exists
+import { useState, useEffect } from 'react';
 
 export default function Admin() {
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState(null)
-  const [error, setError] = useState(null)
-  const [rosters, setRosters] = useState([])
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [rosters, setRosters] = useState([]);
   
   const [formData, setFormData] = useState({
     year: new Date().getFullYear(),
-    month: new Date().getMonth() + 1,
-    totalLines: 2500 // Note: totalLines is sent in the request but might not be used by the Python script directly
-  })
+    month: 'October', // API expects month name as string
+    totalLines: 2500
+  });
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
 
   const handleGenerate = async (e) => {
-    e.preventDefault() // Prevent default form submission behavior
-    setLoading(true)   // Set loading state
-    setError(null)     // Clear previous errors
-    setResult(null)    // Clear previous results
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setResult(null);
 
     try {
-      // Prepare the data to send to the API route
-      // Use values from formData state instead of hardcoded ones
       const requestBody = {
-        year: formData.year,
-        month: formData.month,
-        // totalLines: formData.totalLines // Include if the API route expects it, but the Python script might use its own default
+        year: parseInt(formData.year),
+        month: formData.month, // Send as string (month name)
+        totalLines: parseInt(formData.totalLines)
       };
 
-      console.log("Sending request to generate roster:", requestBody); // Debug log
+      console.log("Sending request:", requestBody);
 
-      // Example of frontend fetch with error handling
       const response = await fetch('/api/roster/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody), // Send the prepared data
+        body: JSON.stringify(requestBody),
       });
 
-      console.log("Response status:", response.status); // Debug log
+      const data = await response.json();
+      console.log('API Response:', data);
 
       if (!response.ok) {
-        // Handle non-2xx responses (e.g., 500 errors)
-        const errorText = await response.text(); // Get the response body (could be HTML error page or JSON error)
-        console.error('API Error:', response.status, errorText);
-        throw new Error(`API Error: ${response.status} - ${errorText}`); // Include response details in error
+        throw new Error(data.details || data.error || 'Failed to generate roster');
       }
 
-      // Attempt to parse the response as JSON
-      const data = await response.json(); 
-      console.log('Success from API:', data);
+      setResult(data);
+      setError(null);
       
-      // Update state with the result
-      setResult(data); // Assuming the API returns the relevant data
-      setError(null); // Clear any previous error state if successful
+      // Refresh roster list after successful generation
+      fetchRosters();
 
     } catch (fetchError) {
-      // This block catches network errors, non-JSON responses, or errors thrown above
-      console.error('Fetch Error in handleGenerate:', fetchError);
-      setError(fetchError.message); // Set the error message in state
-      setResult(null); // Clear any previous result state
+      console.error('Error:', fetchError);
+      setError(fetchError.message);
+      setResult(null);
     } finally {
-      // Always stop the loading state, regardless of success or error
       setLoading(false);
     }
-  }
-
-  // Placeholder for fetching existing rosters - you need to implement this API route
-  const fetchRosters = async () => {
-    // Example implementation:
-    // try {
-    //   const response = await fetch('/api/roster/list'); // You need to create this API route
-    //   if (!response.ok) throw new Error('Failed to fetch rosters');
-    //   const data = await response.json();
-    //   setRosters(data);
-    // } catch (error) {
-    //   console.error('Error fetching rosters:', error);
-    //   setError(error.message);
-    // }
   };
+
+  const fetchRosters = async () => {
+    try {
+      const response = await fetch('/api/roster/list');
+      if (response.ok) {
+        const data = await response.json();
+        setRosters(data.rosters || []);
+      }
+    } catch (error) {
+      console.error('Error fetching rosters:', error);
+    }
+  };
+
+  // Fetch rosters on component mount
+  useEffect(() => {
+    fetchRosters();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-100 py-8">
@@ -102,11 +100,11 @@ export default function Admin() {
                 <input
                   type="number"
                   value={formData.year}
-                  onChange={(e) => setFormData({...formData, year: parseInt(e.target.value) || new Date().getFullYear()})} // Use parseInt safely
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={(e) => setFormData({...formData, year: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
-                  min="2020" // Example constraint
-                  max="2030" // Example constraint
+                  min="2020"
+                  max="2030"
                 />
               </div>
 
@@ -116,12 +114,13 @@ export default function Admin() {
                 </label>
                 <select
                   value={formData.month}
-                  onChange={(e) => setFormData({...formData, month: parseInt(e.target.value) || 1})} // Use parseInt safely
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={(e) => setFormData({...formData, month: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
                 >
-                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
-                    <option key={m} value={m}>
-                      {new Date(2000, m-1).toLocaleString('default', { month: 'long' })}
+                  {monthNames.map(monthName => (
+                    <option key={monthName} value={monthName}>
+                      {monthName}
                     </option>
                   ))}
                 </select>
@@ -134,11 +133,11 @@ export default function Admin() {
                 <input
                   type="number"
                   value={formData.totalLines}
-                  onChange={(e) => setFormData({...formData, totalLines: parseInt(e.target.value) || 2500})} // Use parseInt safely
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={(e) => setFormData({...formData, totalLines: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
-                  min="100" // Example constraint
-                  max="10000" // Example constraint
+                  min="1"
+                  max="10000"
                 />
               </div>
             </div>
@@ -146,7 +145,7 @@ export default function Admin() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition"
+              className="w-full bg-blue-600 text-white py-3 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition font-medium"
             >
               {loading ? 'Generating...' : 'Generate Roster'}
             </button>
@@ -155,34 +154,100 @@ export default function Admin() {
           {error && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
               <p className="text-red-800 font-medium">Error:</p>
-              <p className="text-red-700">{error}</p>
+              <p className="text-red-700 text-sm mt-1">{error}</p>
             </div>
           )}
 
-          {result && !error && ( // Only show success if no error occurred
+          {result && !error && (
             <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
               <p className="text-green-800 font-medium">Success!</p>
-              <p className="text-green-700">
-                Roster generation triggered. ID: {result.rosterPeriodId || 'N/A'}
+              <p className="text-green-700 text-sm mt-1">
+                {result.message || 'Roster generated successfully'}
               </p>
-              {result.linesGenerated !== undefined && (
-                <p className="text-green-700 text-sm mt-1">
-                  Lines generated: {result.linesGenerated}
-                </p>
+              {result.rosterPeriod && (
+                <div className="mt-2 text-sm text-green-700">
+                  <p>Year: {result.rosterPeriod.year}</p>
+                  <p>Month: {result.rosterPeriod.month}</p>
+                  <p>Total Lines: {result.rosterPeriod.totalLines}</p>
+                  <p>Status: {result.rosterPeriod.status}</p>
+                </div>
               )}
-              {result.message && (
-                 <p className="text-green-700 text-sm mt-1">
-                  Message: {result.message}
-                </p>
+              {result.summary && (
+                <div className="mt-2 text-sm text-green-700">
+                  <p>Total Employees: {result.summary.totalEmployees}</p>
+                  <p>Total Days: {result.summary.totalDays}</p>
+                </div>
               )}
             </div>
           )}
         </div>
 
         {/* Roster List */}
-        {/* Ensure the RosterTable component is designed to handle the rosters prop and the onLoad function */}
-        <RosterTable rosters={rosters} onLoad={fetchRosters} />
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Generated Rosters</h2>
+            <button
+              onClick={fetchRosters}
+              className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition"
+            >
+              Refresh
+            </button>
+          </div>
+          
+          {rosters.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No rosters generated yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Year
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Month
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total Lines
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Created
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {rosters.map((roster) => (
+                    <tr key={roster.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {roster.year}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {roster.month}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {roster.totalLines}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          roster.status === 'PUBLISHED' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {roster.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(roster.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  )
+  );
 }
