@@ -1,5 +1,5 @@
 // pages/api/roster/generate.js
-import { prisma } from '../../../lib/db';
+import prisma from '../../../lib/db';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -9,6 +9,7 @@ export default async function handler(req, res) {
   try {
     const { year, month, totalLines } = req.body;
 
+    // Validate required fields
     if (!year || !month || !totalLines) {
       return res.status(400).json({ 
         error: 'Missing required fields',
@@ -17,6 +18,21 @@ export default async function handler(req, res) {
     }
 
     console.log(`Generating roster for ${year}-${month} with ${totalLines} employees`);
+
+    // Check if roster already exists
+    const existingRoster = await prisma.rosterPeriod.findFirst({
+      where: {
+        year: parseInt(year),
+        month: month
+      }
+    });
+
+    if (existingRoster) {
+      return res.status(409).json({
+        error: 'Roster already exists',
+        details: `A roster for ${month} ${year} already exists`
+      });
+    }
 
     // Fetch employees from database
     const employees = await prisma.employee.findMany({
@@ -33,25 +49,30 @@ export default async function handler(req, res) {
       });
     }
 
-    // Generate the roster
-    const generator = new RosterGenerator(employees, parseInt(year), parseInt(month));
+    // Generate the roster using your logic
+    const generator = new RosterGenerator(employees, parseInt(year), month);
     const rosterData = generator.generate();
 
-    // Save roster to database
-    const savedRoster = await prisma.roster.create({
+    // Create roster period
+    const rosterPeriod = await prisma.rosterPeriod.create({
       data: {
         year: parseInt(year),
-        month: parseInt(month),
-        totalEmployees: employees.length,
-        schedule: rosterData.schedule,
-        summary: rosterData.summary,
-        createdAt: new Date()
+        month: month,
+        totalLines: employees.length,
+        status: 'PUBLISHED'
       }
     });
 
+    // Store the schedule data as JSON
+    // NOTE: You'll need to add this to your schema or store separately
+    // For now, we return it in the response
+    
     return res.status(200).json({
       success: true,
-      roster: savedRoster,
+      rosterPeriod: rosterPeriod,
+      schedule: rosterData.schedule,
+      summary: rosterData.summary,
+      dates: rosterData.dates,
       message: `Roster generated successfully for ${employees.length} employees`
     });
 
@@ -87,7 +108,6 @@ class RosterGenerator {
 
     console.log(`Total: ${this.employees.length}, Vacation: ${vacationEmployees.length}, Available: ${availableEmployees.length}`);
 
-    // Generate schedule for each employee
     const schedule = {};
     
     // Assign vacation
@@ -121,9 +141,18 @@ class RosterGenerator {
 
   getMonthDates() {
     const dates = [];
-    const date = new Date(this.year, this.month - 1, 1);
+    // Convert month name to number
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthNumber = monthNames.indexOf(this.month);
     
-    while (date.getMonth() === this.month - 1) {
+    if (monthNumber === -1) {
+      throw new Error(`Invalid month: ${this.month}`);
+    }
+    
+    const date = new Date(this.year, monthNumber, 1);
+    
+    while (date.getMonth() === monthNumber) {
       dates.push(new Date(date));
       date.setDate(date.getDate() + 1);
     }
@@ -135,7 +164,6 @@ class RosterGenerator {
     const vacationCount = Math.floor(this.employees.length * this.vacationPercentage);
     const indices = Array.from({ length: this.employees.length }, (_, i) => i);
     
-    // Shuffle and take first vacationCount
     for (let i = indices.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [indices[i], indices[j]] = [indices[j], indices[i]];
@@ -160,25 +188,20 @@ class RosterGenerator {
     const shifts = ['A', 'B'];
     const baseCycle = [];
 
-    // Build cycle with 2 shifts
     for (let shiftIdx = 0; shiftIdx < 2; shiftIdx++) {
       const currentShift = shifts[(empIdx + shiftIdx) % 2];
       const workDays = (empIdx + shiftIdx) % 2 === 0 ? 5 : 6;
       
-      // Add work days
       for (let i = 0; i < workDays; i++) {
         baseCycle.push(currentShift);
       }
       
-      // Add 2 OFF days
       baseCycle.push('OFF', 'OFF');
     }
 
-    // Apply offset
     const offset = empIdx % baseCycle.length;
     const offsetCycle = [...baseCycle.slice(offset), ...baseCycle.slice(0, offset)];
 
-    // Generate pattern for entire month
     for (let i = 0; i < totalDays; i++) {
       pattern.push(offsetCycle[i % offsetCycle.length]);
     }
@@ -191,25 +214,20 @@ class RosterGenerator {
     const shifts = ['A', 'B', 'C'];
     const baseCycle = [];
 
-    // Build cycle with 3 shifts
     for (let shiftIdx = 0; shiftIdx < 3; shiftIdx++) {
       const currentShift = shifts[(empIdx + shiftIdx) % 3];
       const workDays = (empIdx + shiftIdx) % 2 === 0 ? 5 : 6;
       
-      // Add work days
       for (let i = 0; i < workDays; i++) {
         baseCycle.push(currentShift);
       }
       
-      // Add 2 OFF days
       baseCycle.push('OFF', 'OFF');
     }
 
-    // Apply offset
     const offset = empIdx % baseCycle.length;
     const offsetCycle = [...baseCycle.slice(offset), ...baseCycle.slice(0, offset)];
 
-    // Generate pattern for entire month
     for (let i = 0; i < totalDays; i++) {
       pattern.push(offsetCycle[i % offsetCycle.length]);
     }
@@ -224,17 +242,14 @@ class RosterGenerator {
       const dateKey = date.toISOString();
       
       ['A', 'B', 'C'].forEach(shift => {
-        // Find employees working this shift on this date
         const shiftEmployees = availableEmployees
           .filter(emp => schedule[emp.id][dateKey] === shift)
           .map(emp => emp.id);
 
-        // Sort by standby count (assign to those with fewer standbys)
         shiftEmployees.sort((a, b) => 
           (employeeStandbyCount[a] || 0) - (employeeStandbyCount[b] || 0)
         );
 
-        // Assign standby to first N employees
         const toAssign = Math.min(this.standbyPerShift, shiftEmployees.length);
         for (let i = 0; i < toAssign; i++) {
           const empId = shiftEmployees[i];
@@ -255,7 +270,6 @@ class RosterGenerator {
       employeeStats: {}
     };
 
-    // Calculate daily coverage
     monthDates.forEach(date => {
       const dateKey = date.toISOString();
       const coverage = { date: date.toISOString().split('T')[0], A: 0, B: 0, C: 0, OFF: 0, VACATION: 0 };
@@ -274,7 +288,6 @@ class RosterGenerator {
       summary.dailyCoverage.push(coverage);
     });
 
-    // Calculate per-employee statistics
     this.employees.forEach(employee => {
       const empSchedule = schedule[employee.id];
       const stats = { A: 0, B: 0, C: 0, OFF: 0, VACATION: 0, STANDBY: 0 };
