@@ -1,94 +1,28 @@
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "sqlite"  // Change to "postgresql" for production
-  url      = env("DATABASE_URL")
+model Roster {
+  id             String   @id @default(cuid())
+  year           Int
+  month          Int
+  totalEmployees Int
+  schedule       Json     // Stores the entire schedule
+  summary        Json     // Stores summary statistics
+  createdAt      DateTime @default(now())
+  
+  @@unique([year, month])
+  @@index([year, month])
 }
 
 model Employee {
-  id          String   @id @default(cuid())
-  employeeId  String   @unique
-  name        String
-  email       String?  @unique
-  department  String
-  position    String?
-  seniority   Int
-  isActive    Boolean  @default(true)
-  password    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  bids        Bid[]
-  assignments Assignment[]
-  
-  @@map("employees")
+  id           String      @id @default(cuid())
+  employeeId   String      @unique // Like EMP0001
+  name         String
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  position     String?
+  createdAt    DateTime    @default(now())
 }
 
-model RosterPeriod {
-  id          String   @id @default(cuid())
-  year        Int
-  month       Int
-  status      String
-  startDate   DateTime
-  endDate     DateTime
-  totalLines  Int      @default(2500)
-  createdAt   DateTime @default(now())
-  
-  lines       RosterLine[]
-  bids        Bid[]
-  assignments Assignment[]
-  
-  @@unique([year, month])
-  @@map("roster_periods")
-}
-
-model RosterLine {
-  id              String @id @default(cuid())
-  lineNumber      Int
-  rosterPeriodId  String
-  date            DateTime
-  shift           String
-  department      String
-  isAvailable     Boolean @default(true)
-  
-  rosterPeriod RosterPeriod @relation(fields: [rosterPeriodId], references: [id], onDelete: Cascade)
-  bids         Bid[]        // One roster line can have many bids
-  assignment   Assignment?  // One roster line can have at most one assignment (globally, due to @unique on rosterLineId)
-  
-  @@unique([rosterPeriodId, lineNumber, date])
-  @@map("roster_lines")
-}
-
-model Bid {
-  id             String @id @default(cuid())
-  employeeId     String
-  rosterPeriodId String
-  rosterLineId   String  // Foreign key to RosterLine - not unique, many bids per line
-  priority       Int
-  submittedAt    DateTime @default(now())
-  
-  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  rosterPeriod RosterPeriod @relation(fields: [rosterPeriodId], references: [id], onDelete: Cascade)
-  rosterLine   RosterLine   @relation(fields: [rosterLineId], references: [id], onDelete: Cascade)
-  
-  @@unique([employeeId, rosterPeriodId, rosterLineId])
-  @@map("bids")
-}
-
-model Assignment {
-  id             String @id @default(cuid())
-  employeeId     String
-  rosterPeriodId String
-  rosterLineId   String @unique  // <-- Add @unique to satisfy Prisma's one-to-one validation
-  assignedAt     DateTime @default(now())
-  
-  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  rosterPeriod RosterPeriod @relation(fields: [rosterPeriodId], references: [id], onDelete: Cascade)
-  rosterLine   RosterLine   @relation(fields: [rosterLineId], references: [id], onDelete: Cascade)
-  
-  // @@unique([rosterPeriodId, rosterLineId])  // Remove this as @unique on rosterLineId makes it global
-  @@unique([employeeId, rosterPeriodId])    // One employee can have at most one assignment per period
-  @@map("assignments")
+model Department {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  employees Employee[]
 }
