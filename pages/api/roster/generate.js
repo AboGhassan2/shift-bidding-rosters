@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
     // Save to database
     const created = await prisma.shift.createMany({
-      data: shifts.map(s => ({
+      data: shifts.map(s => ({,
         id: s.id,
         role: s.role,
         date: s.date,
