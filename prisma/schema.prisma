@@ -1,10 +1,20 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"  // or "mysql" or "sqlite" depending on your database
+  url      = env("DATABASE_URL")
+}
+
 model Roster {
   id             String   @id @default(cuid())
   year           Int
   month          Int
   totalEmployees Int
-  schedule       Json     // Stores the entire schedule
-  summary        Json     // Stores summary statistics
+  schedule       Json
+  summary        Json
   createdAt      DateTime @default(now())
   
   @@unique([year, month])
@@ -13,7 +23,7 @@ model Roster {
 
 model Employee {
   id           String      @id @default(cuid())
-  employeeId   String      @unique // Like EMP0001
+  employeeId   String      @unique
   name         String
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
