@@ -1,5 +1,5 @@
 // pages/api/roster/generate.js
-import prisma from '../../../lib/db';
+import { prisma } from '../../../lib/db';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
