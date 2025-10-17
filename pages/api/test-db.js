@@ -1,16 +1,19 @@
-import { prisma } from '../../lib/db'
+// pages/api/test-db.js
+
+// Change this line:
+// import { prisma } from '../../lib/db';
+
+// To this:
+import prisma from '../../lib/db'; // Import the default export
 
 export default async function handler(req, res) {
   try {
-    const employeeCount = await prisma.employee.count()
-    
-    res.status(200).json({ 
-      message: 'Database connection successful!', 
-      employeeCount,
-      timestamp: new Date().toISOString()
-    })
+    // Test the connection by counting roster periods (or any other model)
+    const count = await prisma.rosterPeriod.count(); // Or prisma.employee.count() if you prefer
+
+    res.status(200).json({ success: true, count });
   } catch (error) {
-    console.error('Database error:', error)
-    res.status(500).json({ error: 'Database connection failed' })
+    console.error('Database connection error:', error);
+    res.status(500).json({ error: 'Database connection failed', details: error.message });
   }
 }
