@@ -1,5 +1,11 @@
 // pages/api/roster/generate.js
-import { prisma } from '../../../lib/db';
+
+// Import prisma using the ES module syntax, matching your lib/db.js export
+import prisma from '../../../lib/db';
+
+// Optional: Add logging for debugging Prisma client instantiation (remove in production)
+// console.log('Prisma client instance in generate.js:', prisma);
+// console.log('Type of prisma:', typeof prisma);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,62 +17,74 @@ export default async function handler(req, res) {
 
     // Validate required fields
     if (!year || !month || !totalLines) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Missing required fields',
-        details: 'year, month, and totalLines are required' 
+        details: 'year, month, and totalLines are required'
       });
     }
 
-    console.log(`Generating roster for ${year}-${month} with ${totalLines} employees`);
+    // Ensure year, month, totalLines are numbers if they come as strings
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month); // Treat month as integer (1-12)
+    const totalLinesNum = parseInt(totalLines);
+
+    console.log(`Generating roster for ${yearNum}-${monthNum} with ${totalLinesNum} employees`);
+
+    // Optional: Add logging to check Prisma client inside the handler
+    // console.log('Inside handler - Prisma client instance:', prisma);
+    // if (!prisma) {
+    //   console.error('Prisma client is undefined inside handler!');
+    //   return res.status(500).json({ error: 'Prisma client is undefined' });
+    // }
 
     // Check if roster already exists
     const existingRoster = await prisma.rosterPeriod.findFirst({
       where: {
-        year: parseInt(year),
-        month: month
+        year: yearNum,
+        month: monthNum
       }
     });
 
     if (existingRoster) {
       return res.status(409).json({
         error: 'Roster already exists',
-        details: `A roster for ${month} ${year} already exists`
+        details: `A roster for ${monthNum} ${yearNum} already exists`
       });
     }
 
     // Fetch employees from database
     const employees = await prisma.employee.findMany({
       include: {
-        department: true,
+        department: true, // Ensure department relation is included
       },
-      take: parseInt(totalLines)
+      take: totalLinesNum
     });
 
     if (employees.length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'No employees found',
-        details: 'Please add employees to the database first' 
+        details: 'Please add employees to the database first'
       });
     }
 
     // Generate the roster using your logic
-    const generator = new RosterGenerator(employees, parseInt(year), month);
+    // Pass the integer month number to the generator
+    const generator = new RosterGenerator(employees, yearNum, monthNum);
     const rosterData = generator.generate();
 
     // Create roster period
     const rosterPeriod = await prisma.rosterPeriod.create({
       data: {
-        year: parseInt(year),
-        month: month,
+        year: yearNum,
+        month: monthNum, // Store month as integer
         totalLines: employees.length,
         status: 'PUBLISHED'
       }
     });
 
-    // Store the schedule data as JSON
-    // NOTE: You'll need to add this to your schema or store separately
+    // Store the schedule data as JSON (or handle separately if needed)
     // For now, we return it in the response
-    
+
     return res.status(200).json({
       success: true,
       rosterPeriod: rosterPeriod,
@@ -78,18 +96,28 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Roster generation error:', error);
-    return res.status(500).json({ 
+    // It's good practice to send a more generic error message in production
+    // to avoid exposing sensitive information.
+    return res.status(500).json({
       error: 'Failed to generate roster',
-      details: error.message 
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' // Show full error only in development
     });
   }
 }
 
+// Helper function to get month name from number (if needed elsewhere)
+function getMonthName(monthNumber) {
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                     'July', 'August', 'September', 'October', 'November', 'December'];
+  return monthNames[monthNumber - 1]; // monthNumber is 1-based (Jan=1)
+}
+
 class RosterGenerator {
-  constructor(employees, year, month) {
+  // Constructor now expects integer month
+  constructor(employees, year, monthNumber) {
     this.employees = employees;
     this.year = year;
-    this.month = month;
+    this.monthNumber = monthNumber; // Store the integer month number
     this.vacationPercentage = 0.1;
     this.shifts = {
       A: { name: 'Morning', start: '07:00', end: '15:00' },
@@ -109,7 +137,7 @@ class RosterGenerator {
     console.log(`Total: ${this.employees.length}, Vacation: ${vacationEmployees.length}, Available: ${availableEmployees.length}`);
 
     const schedule = {};
-    
+
     // Assign vacation
     vacationEmployees.forEach(idx => {
       schedule[this.employees[idx].id] = {};
@@ -124,7 +152,7 @@ class RosterGenerator {
 
       const pattern = this.generateShiftPattern(employee, idx, monthDates);
       schedule[employee.id] = {};
-      
+
       monthDates.forEach((date, dateIdx) => {
         schedule[employee.id][date.toISOString()] = pattern[dateIdx];
       });
@@ -141,34 +169,26 @@ class RosterGenerator {
 
   getMonthDates() {
     const dates = [];
-    // Convert month name to number
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December'];
-    const monthNumber = monthNames.indexOf(this.month);
-    
-    if (monthNumber === -1) {
-      throw new Error(`Invalid month: ${this.month}`);
-    }
-    
-    const date = new Date(this.year, monthNumber, 1);
-    
-    while (date.getMonth() === monthNumber) {
+    // Use the stored integer month number (0-based for Date constructor)
+    const date = new Date(this.year, this.monthNumber - 1, 1); // monthNumber is 1-based, Date constructor needs 0-based
+
+    while (date.getMonth() === this.monthNumber - 1) { // Check against 0-based month
       dates.push(new Date(date));
       date.setDate(date.getDate() + 1);
     }
-    
+
     return dates;
   }
 
   assignVacationEmployees() {
     const vacationCount = Math.floor(this.employees.length * this.vacationPercentage);
     const indices = Array.from({ length: this.employees.length }, (_, i) => i);
-    
+
     for (let i = indices.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [indices[i], indices[j]] = [indices[j], indices[i]];
     }
-    
+
     return indices.slice(0, vacationCount);
   }
 
@@ -191,11 +211,11 @@ class RosterGenerator {
     for (let shiftIdx = 0; shiftIdx < 2; shiftIdx++) {
       const currentShift = shifts[(empIdx + shiftIdx) % 2];
       const workDays = (empIdx + shiftIdx) % 2 === 0 ? 5 : 6;
-      
+
       for (let i = 0; i < workDays; i++) {
         baseCycle.push(currentShift);
       }
-      
+
       baseCycle.push('OFF', 'OFF');
     }
 
@@ -217,11 +237,11 @@ class RosterGenerator {
     for (let shiftIdx = 0; shiftIdx < 3; shiftIdx++) {
       const currentShift = shifts[(empIdx + shiftIdx) % 3];
       const workDays = (empIdx + shiftIdx) % 2 === 0 ? 5 : 6;
-      
+
       for (let i = 0; i < workDays; i++) {
         baseCycle.push(currentShift);
       }
-      
+
       baseCycle.push('OFF', 'OFF');
     }
 
@@ -240,13 +260,13 @@ class RosterGenerator {
 
     monthDates.forEach(date => {
       const dateKey = date.toISOString();
-      
+
       ['A', 'B', 'C'].forEach(shift => {
         const shiftEmployees = availableEmployees
           .filter(emp => schedule[emp.id][dateKey] === shift)
           .map(emp => emp.id);
 
-        shiftEmployees.sort((a, b) => 
+        shiftEmployees.sort((a, b) =>
           (employeeStandbyCount[a] || 0) - (employeeStandbyCount[b] || 0)
         );
 
